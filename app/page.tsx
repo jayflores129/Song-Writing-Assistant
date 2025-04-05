@@ -4,7 +4,14 @@ import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import React, { createRef, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import {
+  ChevronDown,
+  Download,
+  Guitar,
+  Play,
+  Plus,
+  PlusCircle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import * as Tone from "tone";
 import {
@@ -13,6 +20,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { salamanderUrls } from "@/lib/instrument_urls";
+import MainLayout from "@/components/layout/MainLayout";
 
 const _chords = ["C", "D", "E", "F", "G", "A", "B"];
 
@@ -40,13 +48,15 @@ function Chord({ name }: { name: string }) {
     <div
       ref={drag as any}
       style={{
-        opacity: isDragging ? 0.5 : 1,
         fontWeight: "bold",
         cursor: "move",
       }}
-      className="text-[0.9em] shadow px-1 font-serif"
+      className={cn(
+        "border-r last:border-r-0 text-gray-500 w-[40px] h-[40px] flex items-center gap-2 justify-center hover:bg-accent",
+        isDragging && "bg-transparent"
+      )}
     >
-      {name}
+      <span>{name}</span>
     </div>
   );
 }
@@ -117,7 +127,6 @@ const ChordDropZone = ({
                   value={beat}
                   onChange={(e) => onChangeBeat && onChangeBeat(e.target.value)}
                 >
-                  <option value=""></option>
                   <option value="1">1 beat</option>
                   <option value="2">2 beats</option>
                   <option value="3">3 beats</option>
@@ -143,11 +152,7 @@ const ChordDropZone = ({
 
 export default function Page() {
   const [data, setData] = useState<any>([]);
-  const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-  const lyricEditorRef = useRef<HTMLTextAreaElement>(null);
-  const [lyricEditorValue, setLyricEditorValue] = useState("");
-  const [lyricSelectedKeys, setLyricSelectedKeys] =
-    useState<[dataKey: number, wordKey: number]>();
+  useState<[dataKey: number, wordKey: number]>();
 
   const onChangeInput = (e: any, dataKey: any, workKey?: any) => {
     const splitValue = e.target.value?.split("\n");
@@ -203,35 +208,9 @@ export default function Page() {
     }
   };
 
-  const onClickLyricLine = (e: any, key: number, key2: number) => {
-    if (!Array.isArray(data) && !e.currentTarget) return;
-    const _data = [...data];
-    const sentence = _data[key]?.sentences?.[key2];
-    const bound = e.currentTarget.getBoundingClientRect();
-    const textContent = sentence?.words?.join(" ");
-    setLyricSelectedKeys([key, key2]);
-    setLyricEditorValue(textContent);
-    if (lyricEditorRef.current) {
-      const inputStyle: any = {
-        top: `${bound.top}px`,
-        left: `${bound.left}px`,
-        width: `${bound.width}px`,
-        height: `${bound.height}px`,
-        wordSpacing: "0.25rem",
-        lineHeight: 1.5,
-      };
-      for (const prop in inputStyle) {
-        lyricEditorRef.current.style[prop as any] = inputStyle[prop];
-      }
-      setTimeout(() => {
-        lyricEditorRef.current?.focus();
-      });
-    }
-  };
-
-  const onAddSection = (name: string) => {
+  const onAddSection = () => {
     const insertData = {
-      name,
+      name: "[Section Name]",
       sentences: [],
       editableRef: createRef<any>(),
     };
@@ -327,187 +306,183 @@ export default function Page() {
   console.log(data);
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div className="flex flex-items gap-2 p-3">
-        {_chords.map((chord: any, key: number) => (
-          <Chord name={chord} key={key} />
-        ))}
-      </div>
-
-      <Button
-        className="m-3"
-        onClick={async () => {
-          const sampler = new Tone.Sampler({
-            urls: salamanderUrls,
-            release: 1,
-            baseUrl: "https://tonejs.github.io/audio/salamander/",
-          }).toDestination();
-
-          Tone.loaded().then(() => {
-            const chords = data
-              ?.flatMap((d: any) => {
-                const chords: ChordType[] = d?.sentences?.flatMap(
-                  (s: any) => s.chords
-                );
-                return Array.isArray(chords) ? chords : [];
-              })
-              .filter(Boolean);
-
-            const transport = Tone.getTransport();
-
-            const part = new Tone.Part(
-              (time, chord) => {
-                const note = `${chord.name}3`;
-                const duration = chord.beat;
-
-                sampler.triggerAttackRelease(note, duration, time);
-              },
-              chords.map((chord: ChordType) => [chord.startAt, chord])
-            );
-
-            part.start(0);
-            transport.start();
-          });
-        }}
-      >
-        Play
-      </Button>
-
-      <textarea
-        className="w-0 h-0 resize-none px-[4px] fixed tracking-2 overflow-hidden z-10"
-        ref={lyricEditorRef}
-        value={lyricEditorValue || ""}
-        onChange={(e) => {
-          setLyricEditorValue(e.target.value);
-          if (lyricSelectedKeys?.length === 2) {
-            onChangeInput(e, lyricSelectedKeys[0], lyricSelectedKeys[1]);
-          }
-        }}
-        onBlur={(e) => {
-          e.target.style.width = "0px";
-          e.target.style.height = "0px";
-          e.target.style.top = "";
-          e.target.style.left = "";
-          if (lyricSelectedKeys?.length === 2) {
-            onBlurSentence(e, lyricSelectedKeys[0], lyricSelectedKeys[1]);
-          }
-          setLyricEditorValue("");
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            const _data = [...data];
-            if (lyricSelectedKeys?.length === 2) {
-              const sentenceNewKey = lyricSelectedKeys[1] + 1;
-              const sentences = _data[lyricSelectedKeys[0]]?.sentences;
-              if (Array.isArray(sentences)) {
-                const sentence = {
-                  words: [""],
-                  ref: createRef<any>(),
-                };
-                sentences.splice(sentenceNewKey, 0, sentence);
-                setData(_data);
-                setTimeout(() => {
-                  sentence.ref.current?.click();
-                });
-              }
-            }
-          }
-        }}
-      ></textarea>
-
-      <div className="container mx-auto py-2">
-        <div className="flex flex-col gap-5">
-          {Array.isArray(data) &&
-            data.map((item: any, key: number) => (
-              <div key={key} className="flex flex-col">
-                <p className="text-[0.85em] capitalize w-fit px-2 mb-6 font-medium">
-                  [{item.name}]
-                </p>
-                <div className="flex flex-col gap-3">
-                  {Array.isArray(item.sentences) &&
-                    item.sentences.map((sentence: any, sentenceKey: number) => (
-                      <React.Fragment key={sentenceKey}>
-                        <div
-                          ref={sentence.ref}
-                          className="h-[32px] flex items-start px-[4px]"
-                          // onClick={(e) => onClickLyricLine(e, key, sentenceKey)}
-                        >
-                          {Array.isArray(sentence?.words) &&
-                            sentence.words.map((word: any, wordKey: number) => {
-                              const chord: ChordType =
-                                sentence?.chords?.[wordKey];
-
-                              return (
-                                <React.Fragment key={wordKey}>
-                                  <ChordDropZone
-                                    word={word}
-                                    beat={chord?.beat}
-                                    startAt={chord?.startAt}
-                                    droppedChord={chord?.name}
-                                    onChangeStartAt={(startAt) =>
-                                      onChangeStartAt(
-                                        startAt,
-                                        key,
-                                        sentenceKey,
-                                        wordKey
-                                      )
-                                    }
-                                    onChangeBeat={(beat) =>
-                                      onChangeBeat(
-                                        beat,
-                                        key,
-                                        sentenceKey,
-                                        wordKey
-                                      )
-                                    }
-                                    onDrop={(dropItem) => {
-                                      onDropChord(
-                                        dropItem,
-                                        key,
-                                        sentenceKey,
-                                        wordKey
-                                      );
-                                    }}
-                                  />
-                                </React.Fragment>
-                              );
-                            })}
-                        </div>
-                      </React.Fragment>
-                    ))}
-                </div>
-                {item.sentences?.length === 0 && (
-                  <textarea
-                    ref={item.editableRef}
-                    onChange={(e) => onChangeInput(e, key)}
-                    className={cn(
-                      "bg-gray-100 px-2 h-[36px] leading-9 resize-none flex items-center"
-                    )}
-                    placeholder="Enter lyrics here"
-                  />
-                )}
+    <MainLayout>
+      <DndProvider backend={HTML5Backend}>
+        <div className="flex p-[15px] gap-3 pe-3">
+          <div className="min-h-[calc(100vh-var(--header-height)-30px)] bg-white w-[calc(100%-500px)] shadow rounded">
+            <div className="p-4 border-b flex items-center justify-between">
+              <p className="font-medium flex gap-1">
+                <span className="text-indigo-500">Title:</span>
+                <span>Forever Young</span>
+              </p>
+              <div className="flex items-center gap-1">
+                <Button variant={"ghost"} size="sm">
+                  <Download width={16} height={16} />
+                </Button>
+                <Button size={"sm"} variant="secondary">
+                  Save
+                </Button>
               </div>
-            ))}
+            </div>
+            <div className="flex items-center p-4 gap-3">
+              <div>
+                <button
+                  className="border border-red-300 text-red-300 hover:bg-red-300 group p-2 hover:drop-shadow-lg w-[40px] h-[40px]"
+                  type="button"
+                  onClick={async () => {
+                    const sampler = new Tone.Sampler({
+                      urls: salamanderUrls,
+                      release: 1,
+                      baseUrl: "https://tonejs.github.io/audio/salamander/",
+                    }).toDestination();
 
-          <div className="flex items-center gap-2">
-            <Button size={"sm"} onClick={() => onAddSection("intro")}>
-              <Plus width={15} height={15} /> Intro
-            </Button>
-            <Button size={"sm"} onClick={() => onAddSection("verse")}>
-              <Plus width={15} height={15} /> Verse
-            </Button>
-            <Button size={"sm"} onClick={() => onAddSection("chorus")}>
-              <Plus width={15} height={15} /> Chorus
-            </Button>
-            <Button size={"sm"} onClick={() => onAddSection("bridge")}>
-              <Plus width={15} height={15} /> Bridge
-            </Button>
-            <Button size={"sm"} onClick={() => onAddSection("outro")}>
-              <Plus width={15} height={15} /> Outro
-            </Button>
+                    Tone.loaded().then(() => {
+                      const chords = data
+                        ?.flatMap((d: any) => {
+                          const chords: ChordType[] = d?.sentences?.flatMap(
+                            (s: any) => s.chords
+                          );
+                          return Array.isArray(chords) ? chords : [];
+                        })
+                        .filter(Boolean);
+
+                      const transport = Tone.getTransport();
+
+                      const part = new Tone.Part(
+                        (time, chord) => {
+                          const note = `${chord.name}3`;
+                          const duration = chord.beat;
+
+                          sampler.triggerAttackRelease(note, duration, time);
+                        },
+                        chords.map((chord: ChordType) => [chord.startAt, chord])
+                      );
+
+                      part.start(0);
+                      transport.start();
+                    });
+                  }}
+                >
+                  <Play strokeWidth={1.5} className="group-hover:text-white" />
+                </button>
+              </div>
+              <div className="flex flex-items border">
+                {_chords.map((chord: any, key: number) => (
+                  <Chord name={chord} key={key} />
+                ))}
+              </div>
+            </div>
+
+            <div className="content px-4 py-3">
+              {Array.isArray(data) &&
+                data.map((item: any, key: number) => (
+                  <div key={key} className="flex flex-col group">
+                    <div
+                      contentEditable
+                      className="capitalize w-fit ms-[20px] group-first:mt-6 mt-7 mb-6"
+                      onBlur={(e) => {
+                        const value = e.currentTarget.textContent;
+                        setData((prevData: any) => {
+                          const newData = [...prevData];
+                          newData[key].name = value;
+                          return newData;
+                        });
+                      }}
+                      dangerouslySetInnerHTML={{
+                        __html: item.name,
+                      }}
+                    />
+                    <div className="flex flex-col gap-3">
+                      {Array.isArray(item.sentences) &&
+                        item.sentences.map(
+                          (sentence: any, sentenceKey: number) => (
+                            <React.Fragment key={sentenceKey}>
+                              <div
+                                ref={sentence.ref}
+                                className="h-[32px] flex items-start px-[4px]"
+                              >
+                                {Array.isArray(sentence?.words) &&
+                                  sentence.words.map(
+                                    (word: any, wordKey: number) => {
+                                      const chord: ChordType =
+                                        sentence?.chords?.[wordKey];
+
+                                      return (
+                                        <React.Fragment key={wordKey}>
+                                          <ChordDropZone
+                                            word={word}
+                                            beat={chord?.beat}
+                                            startAt={chord?.startAt}
+                                            droppedChord={chord?.name}
+                                            onChangeStartAt={(startAt) =>
+                                              onChangeStartAt(
+                                                startAt,
+                                                key,
+                                                sentenceKey,
+                                                wordKey
+                                              )
+                                            }
+                                            onChangeBeat={(beat) =>
+                                              onChangeBeat(
+                                                beat,
+                                                key,
+                                                sentenceKey,
+                                                wordKey
+                                              )
+                                            }
+                                            onDrop={(dropItem) => {
+                                              onDropChord(
+                                                dropItem,
+                                                key,
+                                                sentenceKey,
+                                                wordKey
+                                              );
+                                            }}
+                                          />
+                                        </React.Fragment>
+                                      );
+                                    }
+                                  )}
+                              </div>
+                            </React.Fragment>
+                          )
+                        )}
+                    </div>
+                    {item.sentences?.length === 0 && (
+                      <textarea
+                        ref={item.editableRef}
+                        onChange={(e) => onChangeInput(e, key)}
+                        className={cn(
+                          "bg-gray-100 rounded-md px-3 h-[36px] leading-9 resize-none flex items-center"
+                        )}
+                        placeholder="Enter lyrics here"
+                      />
+                    )}
+                  </div>
+                ))}
+              <div className="flex items-center gap-2 mt-2 px-3">
+                <button
+                  type="button"
+                  onClick={onAddSection}
+                  className="flex items-center gap-2 hover:bg-orange-100 border-orange-200 border w-fit px-2 pe-3 py-1 rounded-2xl"
+                >
+                  <div className="rounded-full bg-orange-300 w-fit p-1">
+                    <Plus strokeWidth={1} width={15} height={15} />
+                  </div>
+                  <p className="text-[0.85em]">Section</p>
+                </button>
+                <button className="flex items-center gap-2 hover:bg-red-100 border-red-200 border w-fit px-2 pe-3 py-1 rounded-2xl">
+                  <div className="rounded-full bg-red-300 w-fit p-1">
+                    <Guitar strokeWidth={1} width={15} height={15} />
+                  </div>
+                  <p className="text-[0.85em]">Instrumental</p>
+                </button>
+              </div>
+            </div>
           </div>
+          <div className="bg-white rounded shadow w-[500px] min-h-[calc(100vh-var(--header-height)-30px)]"></div>
         </div>
-      </div>
-    </DndProvider>
+      </DndProvider>
+    </MainLayout>
   );
 }
