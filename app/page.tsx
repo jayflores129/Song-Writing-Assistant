@@ -1,5 +1,5 @@
 "use client";
-
+import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import React, { createRef, useEffect, useMemo, useRef, useState } from "react";
@@ -12,11 +12,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { salamanderUrls } from "@/lib/instrument_urls";
 
-const _chords = ["C", "Em", "Am", "F", "G", "Dm", "A", "D"];
+const _chords = ["C", "D", "E", "F", "G", "A", "B"];
 
 const itemDnD = {
   CHORD: "chord",
+};
+
+type ChordType = {
+  name?: string;
+  extension?: string;
+  beat?: number;
+  startAt?: number;
 };
 
 function Chord({ name }: { name: string }) {
@@ -47,10 +55,18 @@ const ChordDropZone = ({
   onDrop,
   word,
   droppedChord,
+  onChangeBeat,
+  beat,
+  onChangeStartAt,
+  startAt,
 }: {
   onDrop?: (data: any) => void;
   word: string;
   droppedChord?: any;
+  onChangeBeat?: (beat: any) => void;
+  beat?: any;
+  onChangeStartAt?: (value: number) => void;
+  startAt?: number;
 }) => {
   const [{ isOver }, drop] = useDrop(() => ({
     accept: itemDnD.CHORD,
@@ -77,7 +93,47 @@ const ChordDropZone = ({
               {droppedChord}
             </span>
           </PopoverTrigger>
-          <PopoverContent>Place content for the popover here.</PopoverContent>
+          <PopoverContent
+            side="top"
+            align="center"
+            className="drop-shadow-md border-0"
+          >
+            <div className="flex gap-2">
+              <div className="w-1/2 flex flex-col">
+                <p>Start At</p>
+                <input
+                  type="number"
+                  value={startAt}
+                  onChange={(e: any) =>
+                    onChangeStartAt && onChangeStartAt(e.target.value)
+                  }
+                  className="border p-1 w-full"
+                />
+              </div>
+              <div className="w-1/2 flex flex-col">
+                <p>Beats</p>
+                <select
+                  className="border p-1 w-full"
+                  value={beat}
+                  onChange={(e) => onChangeBeat && onChangeBeat(e.target.value)}
+                >
+                  <option value=""></option>
+                  <option value="1">1 beat</option>
+                  <option value="2">2 beats</option>
+                  <option value="3">3 beats</option>
+                  <option value="4">4 beats</option>
+                  <option value="5">5 beats</option>
+                  <option value="6">6 beats</option>
+                </select>
+              </div>
+            </div>
+
+            <PopoverPrimitive.Arrow
+              className="fill-white drop-shadow-md"
+              width={20}
+              height={10}
+            />
+          </PopoverContent>
         </Popover>
       )}
       <span>{word}</span>
@@ -202,7 +258,67 @@ export default function Page() {
       sentence.chords = sentence.chords
         ? [...sentence.chords]
         : Array(sentence.words.length).fill(undefined);
-      sentence.chords[wordKey] = { name: dropItem?.name, extension: [] };
+
+      sentence.chords[wordKey] = {
+        name: dropItem?.name,
+        extension: [],
+        beat: 4,
+        startAt: 0,
+      };
+
+      return newData;
+    });
+  };
+
+  const onChangeBeat = (
+    beat: any,
+    dataKey: number,
+    sentenceKey: number,
+    chordKey: number
+  ) => {
+    setData((prevData: any) => {
+      const newData = [...prevData];
+
+      const sentence = newData[dataKey]?.sentences?.[sentenceKey];
+      if (!sentence || !Array.isArray(sentence.words)) return prevData;
+
+      sentence.chords = sentence.chords
+        ? [...sentence.chords]
+        : Array(sentence.words.length).fill(undefined);
+
+      const chords: ChordType[] = sentence.chords;
+
+      chords[chordKey] = {
+        ...chords[chordKey],
+        beat,
+      };
+
+      return newData;
+    });
+  };
+
+  const onChangeStartAt = (
+    startAt: any,
+    dataKey: number,
+    sentenceKey: number,
+    chordKey: number
+  ) => {
+    setData((prevData: any) => {
+      const newData = [...prevData];
+
+      const sentence = newData[dataKey]?.sentences?.[sentenceKey];
+      if (!sentence || !Array.isArray(sentence.words)) return prevData;
+
+      sentence.chords = sentence.chords
+        ? [...sentence.chords]
+        : Array(sentence.words.length).fill(undefined);
+
+      const chords: ChordType[] = sentence.chords;
+
+      chords[chordKey] = {
+        ...chords[chordKey],
+        startAt,
+      };
 
       return newData;
     });
@@ -221,21 +337,37 @@ export default function Page() {
       <Button
         className="m-3"
         onClick={async () => {
-          const synth = new Tone.Synth().toDestination();
-          const transport = Tone.getTransport();
-          const now = Tone.now();
+          const sampler = new Tone.Sampler({
+            urls: salamanderUrls,
+            release: 1,
+            baseUrl: "https://tonejs.github.io/audio/salamander/",
+          }).toDestination();
 
-          transport.bpm.value = 95;
+          Tone.loaded().then(() => {
+            const chords = data
+              ?.flatMap((d: any) => {
+                const chords: ChordType[] = d?.sentences?.flatMap(
+                  (s: any) => s.chords
+                );
+                return Array.isArray(chords) ? chords : [];
+              })
+              .filter(Boolean);
 
-          synth.triggerAttackRelease("G4", "1n", now);
-          synth.triggerAttackRelease("C4", "1n", now + 2);
-          synth.triggerAttackRelease("E4", "3n", now + 3);
-          synth.triggerAttackRelease("C4", "1n", now + 4);
-          synth.triggerAttackRelease("G4", "8n", now + 5);
-          synth.triggerAttackRelease("C4", "1n", now + 6);
-          synth.triggerAttackRelease("E4", "3n", now + 8);
-          // synth.triggerAttackRelease("D4", "6n", now + 1);
-          // synth.triggerAttackRelease("C#4", "2n", now + 2);
+            const transport = Tone.getTransport();
+
+            const part = new Tone.Part(
+              (time, chord) => {
+                const note = `${chord.name}3`;
+                const duration = chord.beat;
+
+                sampler.triggerAttackRelease(note, duration, time);
+              },
+              chords.map((chord: ChordType) => [chord.startAt, chord])
+            );
+
+            part.start(0);
+            transport.start();
+          });
         }}
       >
         Play
@@ -302,13 +434,32 @@ export default function Page() {
                         >
                           {Array.isArray(sentence?.words) &&
                             sentence.words.map((word: any, wordKey: number) => {
-                              const chord = sentence?.chords?.[wordKey];
+                              const chord: ChordType =
+                                sentence?.chords?.[wordKey];
 
                               return (
                                 <React.Fragment key={wordKey}>
                                   <ChordDropZone
                                     word={word}
+                                    beat={chord?.beat}
+                                    startAt={chord?.startAt}
                                     droppedChord={chord?.name}
+                                    onChangeStartAt={(startAt) =>
+                                      onChangeStartAt(
+                                        startAt,
+                                        key,
+                                        sentenceKey,
+                                        wordKey
+                                      )
+                                    }
+                                    onChangeBeat={(beat) =>
+                                      onChangeBeat(
+                                        beat,
+                                        key,
+                                        sentenceKey,
+                                        wordKey
+                                      )
+                                    }
                                     onDrop={(dropItem) => {
                                       onDropChord(
                                         dropItem,
